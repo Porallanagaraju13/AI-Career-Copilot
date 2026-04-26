@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: ai-career-copilot-api-porallanagaraju13
+    runtime: python
+    plan: free
+    branch: main
+    autoDeploy: true
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./career_copilot.db

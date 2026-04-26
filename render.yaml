@@ -13,6 +13,8 @@ services:
         - backend/**
         - render.yaml
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: SECRET_KEY
         generateValue: true
       - key: DATABASE_URL

@@ -1,0 +1,104 @@
+"""Authentication API Routes"""
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel, EmailStr
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.security import hash_password, verify_password, create_access_token, get_current_user
+from app.db.session import get_db
+from app.db.models import User
+
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+    full_name: str = ""
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: dict
+
+
+class UserUpdate(BaseModel):
+    full_name: str | None = None
+    phone: str | None = None
+    location: str | None = None
+    headline: str | None = None
+    bio: str | None = None
+    skills: list | None = None
+    preferred_roles: list | None = None
+    salary_min: int | None = None
+    salary_max: int | None = None
+    experience_years: int | None = None
+    open_to_remote: bool | None = None
+
+
+def user_to_dict(user: User) -> dict:
+    return {
+        "id": str(user.id), "email": user.email, "full_name": user.full_name,
+        "avatar_url": user.avatar_url, "role": user.role.value,
+        "phone": user.phone, "location": user.location,
+        "headline": user.headline, "bio": user.bio,
+        "skills": user.skills, "preferred_roles": user.preferred_roles,
+        "salary_min": user.salary_min, "salary_max": user.salary_max,
+        "experience_years": user.experience_years, "open_to_remote": user.open_to_remote,
+        "plan": user.plan,
+    }
+
+
+@router.post("/signup", response_model=AuthResponse)
+async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == req.email))
+    if result.scalars().first():
+        raise HTTPException(400, "Email already registered")
+
+    user = User(email=req.email, hashed_password=hash_password(req.password), full_name=req.full_name)
+    db.add(user)
+    await db.flush()
+    await db.refresh(user)
+
+    token = create_access_token({"sub": str(user.id), "email": user.email, "role": user.role.value})
+    return AuthResponse(access_token=token, user=user_to_dict(user))
+
+
+@router.post("/login", response_model=AuthResponse)
+async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == req.email))
+    user = result.scalars().first()
+    if not user or not verify_password(req.password, user.hashed_password):
+        raise HTTPException(401, "Invalid email or password")
+
+    token = create_access_token({"sub": str(user.id), "email": user.email, "role": user.role.value})
+    return AuthResponse(access_token=token, user=user_to_dict(user))
+
+
+@router.get("/me")
+async def get_me(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == current_user["id"]))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    return user_to_dict(user)
+
+
+@router.patch("/me")
+async def update_me(req: UserUpdate, current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == current_user["id"]))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    for field, value in req.model_dump(exclude_none=True).items():
+        setattr(user, field, value)
+
+    await db.flush()
+    await db.refresh(user)
+    return user_to_dict(user)

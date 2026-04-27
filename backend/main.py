@@ -7,6 +7,7 @@ from app.db.session import init_db
 from app.api.auth import router as auth_router
 from app.api.resume import router as resume_router
 from app.api.jobs import router as jobs_router, app_router as applications_router
+from app.api.admin import router as admin_router
 
 
 @asynccontextmanager
@@ -42,6 +43,7 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(resume_router, prefix="/api")
 app.include_router(jobs_router, prefix="/api")
 app.include_router(applications_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 
 
 @app.get("/api/health")

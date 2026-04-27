@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 const DEFAULT_LOCAL_API_URL = "http://localhost:8000/api";
-const DEFAULT_PRODUCTION_API_URL = "https://ai-career-copilot-api-porallanagaraju13.onrender.com/api";
+const DEFAULT_PRODUCTION_API_URL = "https://ai-career-copilot-peh3.onrender.com/api";
 
 const rawApiUrl = (process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === "production" ? DEFAULT_PRODUCTION_API_URL : DEFAULT_LOCAL_API_URL)).replace(/\/$/, '');
 export const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;

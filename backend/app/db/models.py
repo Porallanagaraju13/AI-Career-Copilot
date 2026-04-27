@@ -55,7 +55,7 @@ class User(Base):
 
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, nullable=False, index=True)
-    hashed_password = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=True)  # Nullable for OTP/OAuth users
     full_name = Column(String(255), default="")
     avatar_url = Column(String(500), default="")
     role = Column(SAEnum(UserRole), default=UserRole.USER)
@@ -180,4 +180,14 @@ class InterviewSession(Base):
     answers = Column(JSON, default=list)
     feedback = Column(JSON, default=list)
     overall_score = Column(Float, default=0)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class OTP(Base):
+    __tablename__ = "otps"
+
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), nullable=False, index=True)
+    otp_code = Column(String(10), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

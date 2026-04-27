@@ -11,6 +11,7 @@ import random
 import os
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+from app.core.config import settings
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -56,7 +57,7 @@ def user_to_dict(user: User) -> dict:
 async def google_auth(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
     try:
         # Verify the Google JWT token
-        client_id = os.getenv("GOOGLE_CLIENT_ID", "YOUR_GOOGLE_CLIENT_ID")
+        client_id = settings.GOOGLE_CLIENT_ID or "YOUR_GOOGLE_CLIENT_ID"
         # To avoid failure in dev if client_id is dummy, we would normally use it.
         idinfo = id_token.verify_oauth2_token(req.token, google_requests.Request(), client_id)
 

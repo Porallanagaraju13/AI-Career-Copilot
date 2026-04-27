@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # CORS
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # Google Auth
+    GOOGLE_CLIENT_ID: Optional[str] = None
+
     class Config:
         env_file = ".env"
         case_sensitive = True

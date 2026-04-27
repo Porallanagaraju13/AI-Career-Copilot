@@ -91,7 +91,13 @@ export default function AdminDashboard() {
       });
 
       if (!res.ok) {
-        throw new Error("Invalid admin credentials");
+        let errData;
+        try {
+          errData = await res.json();
+        } catch {
+          throw new Error(`HTTP Error: ${res.status}`);
+        }
+        throw new Error(errData.detail || "Invalid admin credentials");
       }
 
       const data = await res.json();

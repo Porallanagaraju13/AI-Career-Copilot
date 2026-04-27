@@ -17,7 +17,15 @@ interface Stats {
     email: string;
     full_name: string;
     created_at: string;
+    last_active: string;
     plan: string;
+  }>;
+  recent_resumes: Array<{
+    id: string;
+    filename: string;
+    user_email: string;
+    ats_score: number;
+    created_at: string;
   }>;
 }
 
@@ -210,10 +218,10 @@ export default function AdminDashboard() {
           <StatCard title="Job Applications" value={stats?.counts.applications || 0} icon={CheckSquare} color="bg-orange-100 text-orange-700" />
         </div>
 
-        {/* Recent Signups */}
-        <div className="bg-white rounded-2xl border border-[#e1e8e5] overflow-hidden">
+        {/* User Accounts */}
+        <div className="bg-white rounded-2xl border border-[#e1e8e5] overflow-hidden mb-8">
           <div className="px-6 py-4 border-b border-[#e1e8e5]">
-            <h2 className="font-bold text-[#0f172a]">Recent Signups</h2>
+            <h2 className="font-bold text-[#0f172a]">User Accounts (Logins)</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -222,7 +230,7 @@ export default function AdminDashboard() {
                   <th className="px-6 py-3 font-medium">Name</th>
                   <th className="px-6 py-3 font-medium">Email</th>
                   <th className="px-6 py-3 font-medium">Plan</th>
-                  <th className="px-6 py-3 font-medium">Joined Date</th>
+                  <th className="px-6 py-3 font-medium">Last Active</th>
                 </tr>
               </thead>
               <tbody>
@@ -244,14 +252,66 @@ export default function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-[#6e7977]">
-                      {new Date(user.created_at).toLocaleDateString()}
+                      {user.last_active ? new Date(user.last_active).toLocaleString() : new Date(user.created_at).toLocaleString()}
                     </td>
                   </motion.tr>
                 ))}
                 {stats?.recent_users?.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-6 py-8 text-center text-[#6e7977]">
-                      No users found.
+                      No user logins found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Real-Time Resume Analysis */}
+        <div className="bg-white rounded-2xl border border-[#e1e8e5] overflow-hidden">
+          <div className="px-6 py-4 border-b border-[#e1e8e5]">
+            <h2 className="font-bold text-[#0f172a]">Real-Time Resume Analysis</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-[#f7faf8] border-b border-[#e1e8e5] text-sm text-[#6e7977]">
+                  <th className="px-6 py-3 font-medium">User Email</th>
+                  <th className="px-6 py-3 font-medium">Filename</th>
+                  <th className="px-6 py-3 font-medium">ATS Score</th>
+                  <th className="px-6 py-3 font-medium">Analyzed At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats?.recent_resumes.map((resume, i) => (
+                  <motion.tr 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    key={resume.id} 
+                    className="border-b border-[#e1e8e5] last:border-0 hover:bg-[#f7faf8]/50"
+                  >
+                    <td className="px-6 py-4 font-medium text-[#0f172a]">{resume.user_email}</td>
+                    <td className="px-6 py-4 text-[#6e7977] max-w-[200px] truncate">{resume.filename}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded-md text-xs font-bold ${
+                        resume.ats_score >= 80 ? 'bg-green-100 text-green-700' :
+                        resume.ats_score >= 60 ? 'bg-blue-100 text-blue-700' :
+                        'bg-orange-100 text-orange-700'
+                      }`}>
+                        {resume.ats_score}/100
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-[#6e7977]">
+                      {new Date(resume.created_at).toLocaleString()}
+                    </td>
+                  </motion.tr>
+                ))}
+                {stats?.recent_resumes?.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-[#6e7977]">
+                      No resumes analyzed yet.
                     </td>
                   </tr>
                 )}

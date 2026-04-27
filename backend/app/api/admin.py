@@ -33,9 +33,27 @@ async def get_stats(is_admin: bool = Depends(verify_admin_token), db: AsyncSessi
     jobs_count = await db.scalar(select(func.count()).select_from(Job))
     applications_count = await db.scalar(select(func.count()).select_from(Application))
 
-    # Get latest signups
-    recent_users_result = await db.execute(select(User).order_by(User.created_at.desc()).limit(5))
+    # Get latest signups (User Logins)
+    recent_users_result = await db.execute(select(User).order_by(User.created_at.desc()).limit(15))
     recent_users = recent_users_result.scalars().all()
+
+    # Get recent resumes (Real-time analysis)
+    recent_resumes_result = await db.execute(
+        select(Resume, User.email)
+        .join(User, Resume.user_id == User.id)
+        .order_by(Resume.created_at.desc())
+        .limit(10)
+    )
+    
+    recent_resumes = []
+    for resume, user_email in recent_resumes_result.all():
+        recent_resumes.append({
+            "id": str(resume.id),
+            "filename": resume.filename,
+            "user_email": user_email,
+            "ats_score": resume.ats_score,
+            "created_at": resume.created_at.isoformat() if resume.created_at else None
+        })
 
     return {
         "counts": {
@@ -50,7 +68,9 @@ async def get_stats(is_admin: bool = Depends(verify_admin_token), db: AsyncSessi
                 "email": u.email,
                 "full_name": u.full_name,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
+                "last_active": u.updated_at.isoformat() if u.updated_at else None,
                 "plan": u.plan
             } for u in recent_users
-        ]
+        ],
+        "recent_resumes": recent_resumes
     }

@@ -7,15 +7,26 @@ from app.core.security import get_current_user
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
-async def get_admin_user(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.id == current_user["id"]))
-    user = result.scalars().first()
-    if not user or user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    return user
+from pydantic import BaseModel
+from fastapi import Header
+
+class AdminLogin(BaseModel):
+    username: str
+    password: str
+
+async def verify_admin_token(authorization: str = Header(None)):
+    if not authorization or authorization != "Bearer admin-secure-token-xyz789":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin token")
+    return True
+
+@router.post("/login")
+async def admin_login(credentials: AdminLogin):
+    if credentials.username == "Nagaraju13" and credentials.password == "Poralla@13":
+        return {"token": "admin-secure-token-xyz789"}
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
 @router.get("/stats")
-async def get_stats(admin: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)):
+async def get_stats(is_admin: bool = Depends(verify_admin_token), db: AsyncSession = Depends(get_db)):
     # Aggregate counts
     users_count = await db.scalar(select(func.count()).select_from(User))
     resumes_count = await db.scalar(select(func.count()).select_from(Resume))

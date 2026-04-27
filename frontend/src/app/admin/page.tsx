@@ -1,10 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/utils";
-import { Users, FileText, Briefcase, BarChart2, CheckSquare } from "lucide-react";
+import { API_URL } from "@/lib/utils";
+import { Users, FileText, Briefcase, BarChart2, CheckSquare, Lock } from "lucide-react";
 import { motion } from "framer-motion";
-import Link from "next/link";
 
 interface Stats {
   counts: {
@@ -24,28 +23,51 @@ interface Stats {
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const [adminToken, setAdminToken] = useState<string | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Login form state
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   useEffect(() => {
+    const token = localStorage.getItem("adminToken");
+    if (token) {
+      setAdminToken(token);
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!adminToken) return;
+
     const fetchStats = async () => {
+      setLoading(true);
       try {
-        const userStr = localStorage.getItem("user");
-        if (!userStr) {
-          router.push("/login");
-          return;
-        }
-        
-        const user = JSON.parse(userStr);
-        if (user.role !== "admin") {
-          setError("You do not have permission to view this page.");
-          setLoading(false);
+        const res = await fetch(`${API_URL}/admin/stats`, {
+          headers: {
+            "Authorization": `Bearer ${adminToken}`,
+            "Content-Type": "application/json"
+          }
+        });
+
+        if (res.status === 401) {
+          localStorage.removeItem("adminToken");
+          setAdminToken(null);
+          setError("Session expired. Please log in again.");
           return;
         }
 
-        const data = await apiFetch("/admin/stats");
+        if (!res.ok) throw new Error("Failed to load stats");
+
+        const data = await res.json();
         setStats(data);
+        setError("");
       } catch (err: any) {
         setError(err.message || "Failed to load admin stats");
       } finally {
@@ -54,7 +76,39 @@ export default function AdminDashboard() {
     };
 
     fetchStats();
-  }, [router]);
+  }, [adminToken]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    setLoginError("");
+
+    try {
+      const res = await fetch(`${API_URL}/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      });
+
+      if (!res.ok) {
+        throw new Error("Invalid admin credentials");
+      }
+
+      const data = await res.json();
+      localStorage.setItem("adminToken", data.token);
+      setAdminToken(data.token);
+    } catch (err: any) {
+      setLoginError(err.message);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("adminToken");
+    setAdminToken(null);
+    setStats(null);
+  };
 
   if (loading) {
     return (
@@ -64,19 +118,57 @@ export default function AdminDashboard() {
     );
   }
 
-  if (error) {
+  // Show login form if not authenticated
+  if (!adminToken) {
     return (
       <div className="min-h-screen bg-[#f7faf8] flex flex-col items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-2xl border border-[#ba1a1a]/20 shadow-sm text-center max-w-md w-full">
-          <div className="w-16 h-16 bg-[#ffdad6] text-[#93000a] rounded-full flex items-center justify-center mx-auto mb-4">
-            <Users className="w-8 h-8" />
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white p-8 rounded-2xl border border-[#e1e8e5] shadow-sm max-w-md w-full"
+        >
+          <div className="w-16 h-16 bg-[#e1e8e5] text-[#0f766e] rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-8 h-8" />
           </div>
-          <h1 className="text-xl font-bold text-[#0f172a] mb-2">Access Denied</h1>
-          <p className="text-[#6e7977] mb-6">{error}</p>
-          <Link href="/dashboard" className="px-6 py-2 bg-[#0f766e] text-white rounded-lg hover:bg-[#005c55] transition-colors inline-block">
-            Return to Dashboard
-          </Link>
-        </div>
+          <h1 className="text-2xl font-bold text-center text-[#0f172a] mb-2">Admin Access</h1>
+          <p className="text-center text-[#6e7977] mb-8">Please enter your credentials to view the dashboard.</p>
+          
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-[#0f172a] mb-1">Username</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full p-3 rounded-lg border border-[#e1e8e5] focus:outline-none focus:ring-2 focus:ring-[#0f766e] bg-[#f7faf8]"
+                placeholder="Admin username"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#0f172a] mb-1">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full p-3 rounded-lg border border-[#e1e8e5] focus:outline-none focus:ring-2 focus:ring-[#0f766e] bg-[#f7faf8]"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+            
+            {loginError && <p className="text-[#ba1a1a] text-sm">{loginError}</p>}
+            {error && <p className="text-[#ba1a1a] text-sm">{error}</p>}
+            
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full py-3 bg-[#0f766e] text-white rounded-lg hover:bg-[#005c55] transition-colors font-medium disabled:opacity-50"
+            >
+              {isLoggingIn ? "Authenticating..." : "Login to Admin Panel"}
+            </button>
+          </form>
+        </motion.div>
       </div>
     );
   }
@@ -92,9 +184,12 @@ export default function AdminDashboard() {
             </div>
             <span className="font-bold text-[#0f172a]">Admin Panel</span>
           </div>
-          <Link href="/dashboard" className="text-sm font-medium text-[#0f766e] hover:underline">
-            Exit Admin
-          </Link>
+          <button 
+            onClick={handleLogout}
+            className="text-sm font-medium text-[#ba1a1a] hover:underline"
+          >
+            Logout
+          </button>
         </div>
       </header>
 
@@ -147,7 +242,7 @@ export default function AdminDashboard() {
                     </td>
                   </motion.tr>
                 ))}
-                {stats?.recent_users.length === 0 && (
+                {stats?.recent_users?.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-6 py-8 text-center text-[#6e7977]">
                       No users found.
@@ -180,3 +275,4 @@ function StatCard({ title, value, icon: Icon, color }: { title: string, value: n
     </motion.div>
   );
 }
+

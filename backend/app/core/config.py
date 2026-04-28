@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # AI — provide at least one key to enable LLM-powered analysis
     OPENAI_API_KEY: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
-    AI_MODEL: str = "gemini-2.0-flash"  # or "gpt-4o-mini"
+    AI_MODEL: str = "gemini-1.5-flash"  # fallback from gemini-2.0-flash quota limits
     AI_PROVIDER: str = "gemini"  # "gemini" or "openai"
 
     # Storage

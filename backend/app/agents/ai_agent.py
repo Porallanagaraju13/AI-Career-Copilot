@@ -39,7 +39,7 @@ def get_client() -> genai.Client:
 def call_gemini(prompt: str, max_retries: int = 3) -> str:
     """Call Gemini with retry logic and return the text response."""
     client = get_client()
-    model = settings.AI_MODEL or "gemini-2.0-flash"
+    model = settings.AI_MODEL or "gemini-1.5-flash"
 
     for attempt in range(max_retries):
         try:
@@ -53,6 +53,11 @@ def call_gemini(prompt: str, max_retries: int = 3) -> str:
             )
             return response.text or ""
         except Exception as e:
+            err_str = str(e)
+            # 429 quota exhausted — no point retrying, raise immediately
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                print(f"[AI Agent] Quota exhausted on model '{model}'. Enable billing at console.cloud.google.com/billing")
+                raise
             print(f"[AI Agent] Gemini call failed (attempt {attempt + 1}): {e}")
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s

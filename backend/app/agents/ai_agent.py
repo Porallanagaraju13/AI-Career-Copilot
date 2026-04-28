@@ -26,18 +26,14 @@ from app.core.config import settings
 # ──────────────────────────────────────────────────────────
 # Gemini Client Factory
 # ──────────────────────────────────────────────────────────
-_client: Optional[genai.Client] = None
-
 
 def get_client() -> genai.Client:
-    """Get or create the Gemini API client."""
-    global _client
-    if _client is None:
-        api_key = settings.GEMINI_API_KEY
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY is not set in .env")
-        _client = genai.Client(api_key=api_key)
-    return _client
+    """Create Gemini API client — reads key fresh each call so env var
+    changes on Render/Vercel take effect without code changes."""
+    api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is not set. Add it to your environment variables.")
+    return genai.Client(api_key=api_key)
 
 
 def call_gemini(prompt: str, max_retries: int = 3) -> str:

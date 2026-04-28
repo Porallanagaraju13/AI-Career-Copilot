@@ -163,9 +163,13 @@ def run_full_analysis(text: str) -> dict:
     Primary:  Gemini AI Agent (5 specialized agents)
     Fallback: Rule-based engine (if no API key or API failure)
     """
+    import os
     from app.core.config import settings
 
-    if settings.GEMINI_API_KEY:
+    # Check both settings and raw env (handles Render env var caching edge case)
+    api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
+
+    if api_key:
         try:
             from app.agents.ai_agent import run_ai_agent_analysis
             return run_ai_agent_analysis(text)

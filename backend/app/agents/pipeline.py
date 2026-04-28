@@ -1,300 +1,15 @@
-"""AI Career Copilot Agent System — Resume Analysis Pipeline"""
+"""AI Career Copilot — Analysis Pipeline Orchestrator
+
+Routes analysis through the Gemini AI Agent (primary) or falls
+back to a basic rule-based engine if no API key is configured.
+"""
 import re
-import json
-from typing import Optional
+import traceback
 from dataclasses import dataclass, field
 
 
-# ===== SKILL DATABASE =====
-TECH_SKILLS = {
-    "languages": ["JavaScript", "TypeScript", "Python", "Java", "C++", "C#", "Go", "Rust", "Ruby", "PHP", "Swift", "Kotlin", "Scala", "R", "MATLAB", "Dart", "Perl", "Lua", "Haskell", "Elixir"],
-    "frontend": ["React", "Angular", "Vue", "Next.js", "Nuxt.js", "Svelte", "HTML", "CSS", "SASS", "LESS", "Tailwind", "Bootstrap", "jQuery", "Redux", "Zustand", "Material UI", "Chakra UI", "Styled Components"],
-    "backend": ["Node.js", "Express", "Django", "Flask", "FastAPI", "Spring Boot", "Laravel", ".NET", "Rails", "Gin", "Fiber", "NestJS", "Koa", "Hono"],
-    "database": ["MongoDB", "PostgreSQL", "MySQL", "Redis", "Firebase", "DynamoDB", "Elasticsearch", "SQL Server", "Oracle", "Cassandra", "Neo4j", "SQLite", "MariaDB", "CouchDB", "InfluxDB"],
-    "cloud": ["AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform", "Ansible", "CloudFormation", "Pulumi", "Vercel", "Netlify", "Heroku", "DigitalOcean"],
-    "devops": ["CI/CD", "Jenkins", "GitHub Actions", "GitLab CI", "CircleCI", "ArgoCD", "Prometheus", "Grafana", "ELK Stack", "Datadog", "New Relic"],
-    "ai_ml": ["Machine Learning", "Deep Learning", "NLP", "Computer Vision", "TensorFlow", "PyTorch", "Keras", "Scikit-learn", "Pandas", "NumPy", "OpenCV", "Hugging Face", "LangChain", "LLM", "RAG"],
-    "tools": ["Git", "Linux", "Jira", "Confluence", "Figma", "Sketch", "Photoshop", "VS Code", "IntelliJ", "Postman", "Swagger"],
-    "concepts": ["REST API", "GraphQL", "Microservices", "Agile", "Scrum", "TDD", "BDD", "SOLID", "Design Patterns", "System Design", "Data Structures", "Algorithms", "DevOps", "SRE", "OAuth", "JWT"],
-    "soft": ["Communication", "Leadership", "Problem Solving", "Team Management", "Project Management", "Critical Thinking", "Mentoring", "Collaboration", "Time Management", "Adaptability"]
-}
-
-ALL_SKILLS = []
-for cat_skills in TECH_SKILLS.values():
-    ALL_SKILLS.extend(cat_skills)
-
-
-# ===== ROLE MAPPING =====
-ROLE_DEFINITIONS = {
-    "Frontend Developer": {
-        "keywords": ["react", "angular", "vue", "next.js", "html", "css", "javascript", "typescript", "tailwind", "bootstrap", "ui/ux", "figma", "sass", "redux", "webpack", "responsive"],
-        "emoji": "🎨", "color": "#3b82f6"
-    },
-    "Backend Developer": {
-        "keywords": ["node.js", "express", "django", "flask", "spring boot", "fastapi", "java", "python", "go", "rest api", "graphql", "microservices", "database", "sql", "nosql"],
-        "emoji": "⚙️", "color": "#10b981"
-    },
-    "Full Stack Developer": {
-        "keywords": ["react", "node.js", "mongodb", "express", "javascript", "python", "html", "css", "rest api", "docker", "full stack", "mern", "mean"],
-        "emoji": "🌐", "color": "#8b5cf6"
-    },
-    "Data Scientist": {
-        "keywords": ["machine learning", "deep learning", "python", "tensorflow", "pytorch", "pandas", "numpy", "statistics", "nlp", "computer vision", "data science", "jupyter"],
-        "emoji": "🧬", "color": "#ec4899"
-    },
-    "Data Analyst": {
-        "keywords": ["sql", "excel", "power bi", "tableau", "data analysis", "statistics", "python", "r", "pandas", "visualization", "reporting", "etl"],
-        "emoji": "📊", "color": "#f59e0b"
-    },
-    "DevOps Engineer": {
-        "keywords": ["docker", "kubernetes", "aws", "azure", "gcp", "jenkins", "ci/cd", "terraform", "ansible", "linux", "git", "monitoring", "infrastructure"],
-        "emoji": "🔧", "color": "#06b6d4"
-    },
-    "Cloud Architect": {
-        "keywords": ["aws", "azure", "gcp", "terraform", "kubernetes", "docker", "microservices", "serverless", "cloud", "architecture", "scalability"],
-        "emoji": "☁️", "color": "#6366f1"
-    },
-    "Mobile Developer": {
-        "keywords": ["react native", "flutter", "swift", "kotlin", "android", "ios", "mobile", "dart", "xcode", "android studio"],
-        "emoji": "📱", "color": "#14b8a6"
-    },
-    "ML Engineer": {
-        "keywords": ["machine learning", "deep learning", "tensorflow", "pytorch", "mlops", "python", "model deployment", "training", "inference", "gpu"],
-        "emoji": "🤖", "color": "#a855f7"
-    },
-    "Java Developer": {
-        "keywords": ["java", "spring boot", "hibernate", "maven", "gradle", "microservices", "rest api", "sql", "jpa", "multithreading"],
-        "emoji": "☕", "color": "#ef4444"
-    },
-    "Python Developer": {
-        "keywords": ["python", "django", "flask", "fastapi", "pandas", "numpy", "automation", "scripting", "api", "celery"],
-        "emoji": "🐍", "color": "#22c55e"
-    },
-    "Cybersecurity Analyst": {
-        "keywords": ["cybersecurity", "penetration testing", "security", "firewall", "encryption", "siem", "vulnerability", "compliance", "owasp"],
-        "emoji": "🛡️", "color": "#dc2626"
-    },
-    "UI/UX Designer": {
-        "keywords": ["figma", "sketch", "photoshop", "illustrator", "ui/ux", "wireframe", "prototype", "user research", "design system", "interaction design"],
-        "emoji": "🎭", "color": "#e879f9"
-    },
-    "Project Manager": {
-        "keywords": ["project management", "agile", "scrum", "jira", "confluence", "leadership", "team management", "stakeholder", "roadmap", "sprint"],
-        "emoji": "📋", "color": "#0ea5e9"
-    },
-    "QA Engineer": {
-        "keywords": ["testing", "selenium", "automation", "qa", "test cases", "cypress", "playwright", "jest", "quality assurance", "regression"],
-        "emoji": "✅", "color": "#84cc16"
-    },
-    "Blockchain Developer": {
-        "keywords": ["blockchain", "solidity", "web3", "ethereum", "smart contracts", "defi", "nft", "crypto", "truffle", "hardhat"],
-        "emoji": "⛓️", "color": "#f97316"
-    },
-}
-
-
-# ===== RESUME PARSER AGENT =====
-@dataclass
-class ParsedResume:
-    name: str = "Unknown"
-    email: str = ""
-    phone: str = ""
-    linkedin: str = ""
-    github: str = ""
-    website: str = ""
-    location: str = ""
-    skills: list = field(default_factory=list)
-    experience_years: int = 0
-    education: list = field(default_factory=list)
-    sections: list = field(default_factory=list)
-    projects: str = ""
-    raw_text: str = ""
-    word_count: int = 0
-
-
-def parse_resume(text: str) -> ParsedResume:
-    """Agent 1: Parse resume text into structured data"""
-    result = ParsedResume(raw_text=text, word_count=len(text.split()))
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
-
-    # Name (first non-empty line that looks like a name)
-    for line in lines[:5]:
-        if 2 < len(line) < 60 and not re.search(r'[@\d]', line) and re.match(r'^[A-Z]', line):
-            result.name = line
-            break
-
-    # Contact info
-    email_m = re.search(r'[\w.+-]+@[\w-]+\.[\w.]+', text)
-    if email_m:
-        result.email = email_m.group(0)
-
-    phone_m = re.search(r'(\+?\d[\d\s\-().]{7,}\d)', text)
-    if phone_m:
-        result.phone = phone_m.group(0).strip()
-
-    linkedin_m = re.search(r'linkedin\.com/in/[\w-]+', text, re.I)
-    if linkedin_m:
-        result.linkedin = f"https://{linkedin_m.group(0)}"
-
-    github_m = re.search(r'github\.com/[\w-]+', text, re.I)
-    if github_m:
-        result.github = f"https://{github_m.group(0)}"
-
-    # Skills detection
-    text_lower = text.lower()
-    result.skills = [s for s in ALL_SKILLS if s.lower() in text_lower]
-
-    # Experience
-    exp_patterns = [
-        r'(\d+)\+?\s*years?\s*(of)?\s*(experience|exp)',
-        r'(experience|exp)\s*:?\s*(\d+)\+?\s*years?',
-    ]
-    for p in exp_patterns:
-        m = re.search(p, text, re.I)
-        if m:
-            result.experience_years = int(m.group(1) if m.group(1).isdigit() else m.group(2))
-            break
-    if not result.experience_years:
-        year_matches = re.findall(r'20\d{2}\s*[-–]\s*(20\d{2}|present|current)', text, re.I)
-        if year_matches:
-            result.experience_years = min(len(year_matches) * 2, 20)
-
-    # Education
-    edu_kw = ['B.Tech', 'B.E.', 'B.Sc', 'M.Tech', 'M.Sc', 'MBA', 'PhD', 'Bachelor', 'Master', 'Doctorate',
-              'B.A.', 'M.A.', 'BCA', 'MCA', 'B.Com', 'M.Com', 'Diploma', 'Associate']
-    result.education = [e for e in edu_kw if e.lower() in text_lower]
-
-    # Sections
-    section_kw = ['education', 'experience', 'skills', 'projects', 'certifications', 'achievements',
-                  'summary', 'objective', 'work history', 'publications', 'references', 'awards', 'interests']
-    result.sections = [s for s in section_kw if s in text_lower]
-
-    # Location
-    loc_m = re.search(r'(?:location|address|city)\s*:?\s*([A-Z][a-zA-Z\s,]+)', text)
-    if loc_m:
-        result.location = loc_m.group(1).strip()[:100]
-
-    return result
-
-
-# ===== ATS SCORING AGENT =====
-@dataclass
-class ATSResult:
-    score: int = 0
-    grade: str = "Needs Work"
-    suggestions: list = field(default_factory=list)
-    breakdown: dict = field(default_factory=dict)
-    missing_keywords: list = field(default_factory=list)
-
-
-def calculate_ats_score(parsed: ParsedResume) -> ATSResult:
-    """Agent 2: Calculate ATS compatibility score"""
-    result = ATSResult()
-    score = 0
-
-    # Contact (15 pts)
-    contact_score = 0
-    if parsed.name != "Unknown": contact_score += 5
-    else: result.suggestions.append("Add your full name at the top")
-    if parsed.email: contact_score += 5
-    else: result.suggestions.append("Include a professional email address")
-    if parsed.phone: contact_score += 3
-    else: result.suggestions.append("Add a phone number")
-    if parsed.linkedin: contact_score += 2
-    else: result.suggestions.append("Add your LinkedIn profile URL")
-    result.breakdown["Contact Info"] = {"score": contact_score, "max": 15}
-    score += contact_score
-
-    # Skills (25 pts)
-    skill_count = len(parsed.skills)
-    skill_score = min(int(skill_count * 2.5), 25)
-    if skill_count < 5:
-        result.suggestions.append("Add more relevant skills (aim for 8-15 keywords)")
-    result.breakdown["Skills"] = {"score": skill_score, "max": 25, "count": skill_count}
-    score += skill_score
-
-    # Experience (20 pts)
-    exp_score = min(parsed.experience_years * 4, 20) if parsed.experience_years > 0 else 5
-    if parsed.experience_years == 0:
-        result.suggestions.append("Clearly mention years of experience")
-    result.breakdown["Experience"] = {"score": int(exp_score), "max": 20, "years": parsed.experience_years}
-    score += exp_score
-
-    # Education (10 pts)
-    edu_score = 10 if parsed.education else 0
-    if not parsed.education:
-        result.suggestions.append("Add your educational qualifications")
-    result.breakdown["Education"] = {"score": edu_score, "max": 10}
-    score += edu_score
-
-    # Sections (15 pts)
-    important = ['experience', 'skills', 'education', 'summary']
-    found = [s for s in important if s in parsed.sections]
-    section_score = min(len(found) * 4, 15)
-    missing = [s for s in important if s not in parsed.sections]
-    if missing:
-        result.suggestions.append(f"Add missing sections: {', '.join(missing)}")
-    result.breakdown["Sections"] = {"score": section_score, "max": 15, "found": parsed.sections}
-    score += section_score
-
-    # Format (15 pts)
-    fmt_score = 0
-    if 200 <= parsed.word_count <= 1500: fmt_score += 5
-    elif parsed.word_count < 200: result.suggestions.append("Resume too short — add more details")
-    else: result.suggestions.append("Resume too long — aim for 1-2 pages")
-
-    if any(c in parsed.raw_text for c in ['•', '●', '◦', '▪']): fmt_score += 5
-    else: result.suggestions.append("Use bullet points for better readability")
-
-    avg_line = len(parsed.raw_text) / max(len(parsed.raw_text.split('\n')), 1)
-    if avg_line < 120: fmt_score += 5
-    else: result.suggestions.append("Keep lines concise")
-    result.breakdown["Format"] = {"score": fmt_score, "max": 15, "words": parsed.word_count}
-    score += fmt_score
-
-    result.score = min(score, 100)
-    if result.score >= 80: result.grade = "Excellent"
-    elif result.score >= 60: result.grade = "Good"
-    elif result.score >= 40: result.grade = "Average"
-
-    # Missing keywords
-    common_missing = ["REST API", "Agile", "CI/CD", "Git", "Docker", "Cloud"]
-    result.missing_keywords = [k for k in common_missing if k.lower() not in parsed.raw_text.lower()]
-
-    return result
-
-
-# ===== ROLE DETECTION AGENT =====
-@dataclass
-class DetectedRole:
-    role: str = ""
-    confidence: int = 0
-    matched_skills: list = field(default_factory=list)
-    emoji: str = "💼"
-    color: str = "#6366f1"
-
-
-def detect_roles(parsed: ParsedResume) -> list[DetectedRole]:
-    """Agent 3: Detect suitable job roles from resume"""
-    skills_lower = [s.lower() for s in parsed.skills]
-    text_lower = parsed.raw_text.lower()
-    results = []
-
-    for role, config in ROLE_DEFINITIONS.items():
-        matched = [k for k in config["keywords"] if k in skills_lower or k in text_lower]
-        if not matched:
-            continue
-        confidence = min(int((len(matched) / len(config["keywords"])) * 100), 100)
-        if confidence >= 15:
-            results.append(DetectedRole(
-                role=role, confidence=confidence, matched_skills=matched,
-                emoji=config["emoji"], color=config["color"]
-            ))
-
-    return sorted(results, key=lambda r: r.confidence, reverse=True)[:8]
-
-
-# ===== JOB MATCHING AGENT =====
+# ===== JOB DATABASE =====
+# Shared across agents — realistic job listings for matching
 JOB_DATABASE = [
     {"id": "j1", "title": "Senior Frontend Developer", "company": "Google", "location": "Bangalore, IN", "salary_min": 2500000, "salary_max": 4000000, "currency": "INR", "remote": False, "experience": "3-5 years", "skills": ["react", "javascript", "typescript", "css", "html"], "url": "https://careers.google.com", "logo": "https://logo.clearbit.com/google.com", "posted": "2 days ago", "type": "full-time"},
     {"id": "j2", "title": "React Developer", "company": "Microsoft", "location": "Hyderabad, IN", "salary_min": 1800000, "salary_max": 3000000, "currency": "INR", "remote": False, "experience": "2-4 years", "skills": ["react", "node.js", "typescript"], "url": "https://careers.microsoft.com", "logo": "https://logo.clearbit.com/microsoft.com", "posted": "1 day ago", "type": "full-time"},
@@ -319,72 +34,145 @@ JOB_DATABASE = [
 ]
 
 
-def match_jobs(parsed: ParsedResume, roles: list[DetectedRole]) -> list[dict]:
-    """Agent 4: Match and rank jobs based on skills and roles"""
-    user_skills = [s.lower() for s in parsed.skills]
-    role_names = [r.role.lower() for r in roles]
+# ===== EMERGENCY RULE-BASED FALLBACK =====
+# Only used if Gemini API is completely unavailable
 
-    results = []
+TECH_SKILLS = {
+    "languages": ["JavaScript", "TypeScript", "Python", "Java", "C++", "C#", "Go", "Rust", "Ruby", "PHP", "Swift", "Kotlin", "Scala", "R", "MATLAB", "Dart", "Perl", "Lua", "Haskell", "Elixir"],
+    "frontend": ["React", "Angular", "Vue", "Next.js", "Nuxt.js", "Svelte", "HTML", "CSS", "SASS", "LESS", "Tailwind", "Bootstrap", "jQuery", "Redux", "Zustand", "Material UI", "Chakra UI"],
+    "backend": ["Node.js", "Express", "Django", "Flask", "FastAPI", "Spring Boot", "Laravel", ".NET", "Rails", "Gin", "Fiber", "NestJS", "Koa", "Hono"],
+    "database": ["MongoDB", "PostgreSQL", "MySQL", "Redis", "Firebase", "DynamoDB", "Elasticsearch", "SQL Server", "Oracle", "Cassandra", "Neo4j", "SQLite", "MariaDB"],
+    "cloud": ["AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform", "Ansible", "CloudFormation", "Vercel", "Netlify", "Heroku"],
+    "devops": ["CI/CD", "Jenkins", "GitHub Actions", "GitLab CI", "CircleCI", "ArgoCD", "Prometheus", "Grafana", "Datadog"],
+    "ai_ml": ["Machine Learning", "Deep Learning", "NLP", "Computer Vision", "TensorFlow", "PyTorch", "Keras", "Scikit-learn", "Pandas", "NumPy", "OpenCV", "Hugging Face", "LangChain", "LLM", "RAG"],
+    "tools": ["Git", "Linux", "Jira", "Confluence", "Figma", "Sketch", "Postman", "Swagger"],
+    "concepts": ["REST API", "GraphQL", "Microservices", "Agile", "Scrum", "TDD", "SOLID", "Design Patterns", "System Design", "DevOps", "OAuth", "JWT"],
+    "soft": ["Communication", "Leadership", "Problem Solving", "Team Management", "Project Management", "Mentoring", "Collaboration"]
+}
+
+ALL_SKILLS = []
+for cat_skills in TECH_SKILLS.values():
+    ALL_SKILLS.extend(cat_skills)
+
+ROLE_DEFINITIONS = {
+    "Frontend Developer": {"keywords": ["react", "angular", "vue", "next.js", "html", "css", "javascript", "typescript", "tailwind"], "emoji": "🎨", "color": "#3b82f6"},
+    "Backend Developer": {"keywords": ["node.js", "express", "django", "flask", "spring boot", "fastapi", "java", "python", "rest api", "graphql", "microservices"], "emoji": "⚙️", "color": "#10b981"},
+    "Full Stack Developer": {"keywords": ["react", "node.js", "mongodb", "express", "javascript", "python", "html", "css", "rest api", "docker"], "emoji": "🌐", "color": "#8b5cf6"},
+    "Data Scientist": {"keywords": ["machine learning", "deep learning", "python", "tensorflow", "pytorch", "pandas", "numpy", "nlp", "computer vision"], "emoji": "🧬", "color": "#ec4899"},
+    "DevOps Engineer": {"keywords": ["docker", "kubernetes", "aws", "azure", "gcp", "jenkins", "ci/cd", "terraform", "ansible", "linux"], "emoji": "🔧", "color": "#06b6d4"},
+    "Mobile Developer": {"keywords": ["react native", "flutter", "swift", "kotlin", "android", "ios", "mobile", "dart"], "emoji": "📱", "color": "#14b8a6"},
+    "ML Engineer": {"keywords": ["machine learning", "deep learning", "tensorflow", "pytorch", "mlops", "python"], "emoji": "🤖", "color": "#a855f7"},
+    "Python Developer": {"keywords": ["python", "django", "flask", "fastapi", "pandas", "numpy", "automation"], "emoji": "🐍", "color": "#22c55e"},
+}
+
+
+def _run_rule_based_fallback(text: str) -> dict:
+    """Emergency fallback: rule-based analysis (no API needed)."""
+    text_lower = text.lower()
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    word_count = len(text.split())
+
+    # Parse basics
+    name = "Unknown"
+    for line in lines[:5]:
+        if 2 < len(line) < 60 and not re.search(r'[@\d]', line) and re.match(r'^[A-Z]', line):
+            name = line
+            break
+
+    email_m = re.search(r'[\w.+-]+@[\w-]+\.[\w.]+', text)
+    phone_m = re.search(r'(\+?\d[\d\s\-().]{7,}\d)', text)
+    linkedin_m = re.search(r'linkedin\.com/in/[\w-]+', text, re.I)
+    github_m = re.search(r'github\.com/[\w-]+', text, re.I)
+
+    skills = [s for s in ALL_SKILLS if s.lower() in text_lower]
+
+    # Experience
+    exp_years = 0
+    for p in [r'(\d+)\+?\s*years?\s*(of)?\s*(experience|exp)', r'(experience|exp)\s*:?\s*(\d+)\+?\s*years?']:
+        m = re.search(p, text, re.I)
+        if m:
+            exp_years = int(m.group(1) if m.group(1).isdigit() else m.group(2))
+            break
+
+    # Education
+    edu_kw = ['B.Tech', 'B.E.', 'B.Sc', 'M.Tech', 'M.Sc', 'MBA', 'PhD', 'Bachelor', 'Master', 'BCA', 'MCA']
+    education = [e for e in edu_kw if e.lower() in text_lower]
+
+    # Sections
+    section_kw = ['education', 'experience', 'skills', 'projects', 'certifications', 'summary', 'objective']
+    sections = [s for s in section_kw if s in text_lower]
+
+    # ATS Score
+    score = 0
+    if name != "Unknown": score += 5
+    if email_m: score += 5
+    if phone_m: score += 3
+    if linkedin_m: score += 2
+    score += min(len(skills) * 2, 25)
+    score += min(exp_years * 4, 20) if exp_years > 0 else 5
+    score += 10 if education else 0
+    score += min(len([s for s in ['experience', 'skills', 'education', 'summary'] if s in sections]) * 4, 15)
+    if 200 <= word_count <= 1500: score += 5
+    score = min(score, 100)
+
+    grade = "Excellent" if score >= 80 else "Good" if score >= 60 else "Average" if score >= 40 else "Needs Work"
+
+    # Roles
+    roles = []
+    for role, config in ROLE_DEFINITIONS.items():
+        matched = [k for k in config["keywords"] if k in text_lower]
+        if matched:
+            confidence = min(int((len(matched) / len(config["keywords"])) * 100), 100)
+            if confidence >= 15:
+                roles.append({"role": role, "confidence": confidence, "matched_skills": matched,
+                             "emoji": config["emoji"], "color": config["color"]})
+    roles.sort(key=lambda r: r["confidence"], reverse=True)
+
+    # Jobs
+    user_skills_lower = [s.lower() for s in skills]
+    jobs = []
     for job in JOB_DATABASE:
         job_skills = [s.lower() for s in job["skills"]]
-        matched = [s for s in job_skills if s in user_skills]
-        skill_match = (len(matched) / len(job_skills) * 100) if job_skills else 0
-
-        title_lower = job["title"].lower()
-        role_boost = 30 if any(r.split()[0] in title_lower for r in role_names) else 0
-
-        match_score = min(int(skill_match * 0.7 + role_boost), 100)
-        if match_score >= 15:
-            results.append({**job, "match_score": match_score, "matched_skills": matched})
-
-    return sorted(results, key=lambda j: j["match_score"], reverse=True)[:12]
-
-
-# ===== FULL ANALYSIS PIPELINE =====
-def _run_rule_based(text: str) -> dict:
-    """Fallback: rule-based analysis (no API key needed)"""
-    parsed = parse_resume(text)
-    ats = calculate_ats_score(parsed)
-    roles = detect_roles(parsed)
-    jobs = match_jobs(parsed, roles)
+        matched = [s for s in job_skills if s in user_skills_lower]
+        if matched:
+            match_score = min(int(len(matched) / len(job_skills) * 100), 100)
+            jobs.append({**job, "match_score": match_score, "matched_skills": matched})
+    jobs.sort(key=lambda j: j["match_score"], reverse=True)
 
     return {
         "profile": {
-            "name": parsed.name, "email": parsed.email, "phone": parsed.phone,
-            "linkedin": parsed.linkedin, "github": parsed.github,
-            "location": parsed.location
+            "name": name, "email": email_m.group(0) if email_m else "",
+            "phone": phone_m.group(0).strip() if phone_m else "",
+            "linkedin": f"https://{linkedin_m.group(0)}" if linkedin_m else "",
+            "github": f"https://{github_m.group(0)}" if github_m else "",
+            "location": "", "website": "",
         },
-        "skills": parsed.skills,
-        "experience_years": parsed.experience_years,
-        "education": parsed.education,
-        "sections": parsed.sections,
-        "word_count": parsed.word_count,
-        "ats": {
-            "score": ats.score, "grade": ats.grade,
-            "suggestions": ats.suggestions, "breakdown": ats.breakdown,
-            "missing_keywords": ats.missing_keywords
-        },
-        "roles": [{"role": r.role, "confidence": r.confidence, "matched_skills": r.matched_skills,
-                    "emoji": r.emoji, "color": r.color} for r in roles],
-        "jobs": jobs,
-        "engine": "rule-based",
+        "skills": skills, "experience_years": exp_years, "education": education,
+        "sections": sections, "word_count": word_count,
+        "ats": {"score": score, "grade": grade, "breakdown": {}, "suggestions": ["Set GEMINI_API_KEY for full AI analysis"], "missing_keywords": []},
+        "roles": roles[:8], "jobs": jobs[:12],
+        "coaching": {},
+        "engine": "rule-based-fallback",
     }
 
 
+# ===== MAIN PIPELINE ENTRY POINT =====
 def run_full_analysis(text: str) -> dict:
-    """Run the AI agent pipeline — LangGraph if API key available, else rule-based."""
+    """Run the full resume analysis pipeline.
+
+    Primary:  Gemini AI Agent (5 specialized agents)
+    Fallback: Rule-based engine (if no API key or API failure)
+    """
     from app.core.config import settings
 
-    if settings.GEMINI_API_KEY or settings.OPENAI_API_KEY:
+    if settings.GEMINI_API_KEY:
         try:
-            from app.agents.graph import run_langgraph_analysis
-            result = run_langgraph_analysis(text)
-            result["engine"] = "langgraph"
-            return result
+            from app.agents.ai_agent import run_ai_agent_analysis
+            return run_ai_agent_analysis(text)
         except Exception as e:
-            import traceback
             traceback.print_exc()
-            print(f"[Pipeline] LangGraph failed ({e}), falling back to rule-based")
-            return _run_rule_based(text)
+            print(f"[Pipeline] AI Agent failed ({e}), falling back to rule-based")
+            return _run_rule_based_fallback(text)
     else:
-        return _run_rule_based(text)
+        print("[Pipeline] No GEMINI_API_KEY set — using rule-based fallback")
+        return _run_rule_based_fallback(text)

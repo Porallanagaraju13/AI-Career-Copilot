@@ -43,7 +43,7 @@ async def analyze_resume(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Upload and analyze a resume"""
+    """Upload and analyze a resume using AI Agent"""
     text = await extract_text_from_file(file)
     analysis = run_full_analysis(text)
 
@@ -59,9 +59,9 @@ async def analyze_resume(
         education=analysis["education"],
         sections_found=analysis["sections"],
         ats_score=analysis["ats"]["score"],
-        ats_breakdown=analysis["ats"]["breakdown"],
-        ats_suggestions=analysis["ats"]["suggestions"],
-        missing_keywords=analysis["ats"]["missing_keywords"],
+        ats_breakdown=analysis["ats"].get("breakdown", {}),
+        ats_suggestions=analysis["ats"].get("suggestions", []),
+        missing_keywords=analysis["ats"].get("missing_keywords", []),
         detected_roles=analysis["roles"],
         is_primary=True,
     )
@@ -77,7 +77,7 @@ async def analyze_resume(
 
 @router.post("/analyze-guest")
 async def analyze_resume_guest(file: UploadFile = File(...)):
-    """Analyze resume without auth (limited)"""
+    """Analyze resume without auth (full AI agent analysis)"""
     text = await extract_text_from_file(file)
     analysis = run_full_analysis(text)
     return analysis

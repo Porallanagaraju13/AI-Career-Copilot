@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
   BarChart3, AlertTriangle, CheckCircle2, XCircle, ArrowRight, Lightbulb,
-  User, Code2, GraduationCap, FileText, Layout, Briefcase
+  User, Code2, GraduationCap, FileText, Layout, Briefcase, Sparkles, Star, Clock
 } from "lucide-react";
 import Link from "next/link";
 
@@ -39,7 +39,19 @@ export default function ATSScorePage() {
       <motion.div variants={fadeUp} className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0f172a]">ATS Score Analysis</h1>
-          <p className="text-[#3e4947] text-sm mt-1">{profile?.name ? `Resume: ${profile.name}` : "Your resume analysis results"}</p>
+          <p className="text-[#3e4947] text-sm mt-1">
+            {profile?.name ? `Resume: ${profile.name}` : "Your resume analysis results"}
+            {data.engine === "gemini-ai-agent" && (
+              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-[#005c55]/10 text-[#005c55] text-[10px] font-semibold rounded-full">
+                <Sparkles className="w-3 h-3" /> AI-Powered
+              </span>
+            )}
+            {data.analysis_time && (
+              <span className="ml-2 inline-flex items-center gap-1 text-[11px] text-[#6e7977]">
+                <Clock className="w-3 h-3" /> {data.analysis_time}s
+              </span>
+            )}
+          </p>
         </div>
         <Link href="/dashboard/roles" className="flex items-center gap-2 bg-[#005c55] hover:bg-[#0f766e] text-white px-5 py-2.5 rounded-lg text-sm font-medium transition shadow-sm">
           View Roles <ArrowRight className="w-4 h-4" />
@@ -69,15 +81,35 @@ export default function ATSScorePage() {
               {ats.score >= 80 ? "🎉 Excellent Resume!" : ats.score >= 60 ? "👍 Good Resume" : ats.score >= 40 ? "⚠️ Average Resume" : "🔴 Needs Improvement"}
             </h3>
             <p className="text-[#3e4947] text-sm leading-relaxed">
-              {ats.score >= 80
-                ? "Your resume is highly optimized for Applicant Tracking Systems. It has strong keywords, clear structure, and comprehensive content."
-                : ats.score >= 60
-                  ? "Your resume performs well but has room for improvement. Focus on the suggestions below to boost your score."
-                  : "Your resume needs significant improvements to pass ATS filters. Review each section below for specific recommendations."}
+              {ats.overall_assessment || (
+                ats.score >= 80
+                  ? "Your resume is highly optimized for Applicant Tracking Systems. It has strong keywords, clear structure, and comprehensive content."
+                  : ats.score >= 60
+                    ? "Your resume performs well but has room for improvement. Focus on the suggestions below to boost your score."
+                    : "Your resume needs significant improvements to pass ATS filters. Review each section below for specific recommendations."
+              )}
             </p>
           </div>
         </div>
       </motion.div>
+
+      {/* Strengths — only from AI agent */}
+      {ats.strengths && ats.strengths.length > 0 && (
+        <motion.div variants={fadeUp} className="p-5 rounded-2xl bg-[#0f766e]/5 border border-[#0f766e]/20 card-elevated">
+          <div className="flex items-center gap-2 mb-3">
+            <Star className="w-5 h-5 text-[#0f766e]" />
+            <h3 className="text-base font-semibold text-[#0f172a]">Resume Strengths</h3>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {ats.strengths.map((s: string, i: number) => (
+              <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-white/60 border border-[#0f766e]/10">
+                <CheckCircle2 className="w-4 h-4 text-[#0f766e] mt-0.5 shrink-0" />
+                <span className="text-sm text-[#3e4947]">{s}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Breakdown */}
       <motion.div variants={fadeUp} className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -97,9 +129,13 @@ export default function ATSScorePage() {
                   <div className="text-xs text-[#6e7977]">{val.score}/{val.max} pts</div>
                 </div>
               </div>
-              <div className="w-full h-2 bg-[#ebefed] rounded-full">
+              <div className="w-full h-2 bg-[#ebefed] rounded-full mb-2">
                 <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />
               </div>
+              {/* AI-generated details for each section */}
+              {val.details && (
+                <p className="text-[11px] text-[#6e7977] leading-relaxed mt-1">{val.details}</p>
+              )}
             </div>
           );
         })}
@@ -149,6 +185,17 @@ export default function ATSScorePage() {
               </span>
             ))}
           </div>
+        </motion.div>
+      )}
+
+      {/* AI Summary — only from AI agent */}
+      {data.summary && (
+        <motion.div variants={fadeUp} className="p-6 rounded-2xl bg-gradient-to-br from-[#005c55]/5 to-[#565e74]/5 border border-[#005c55]/20 card-elevated">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-5 h-5 text-[#005c55]" />
+            <h3 className="text-base font-semibold text-[#0f172a]">AI Professional Summary</h3>
+          </div>
+          <p className="text-sm text-[#3e4947] leading-relaxed">{data.summary}</p>
         </motion.div>
       )}
     </motion.div>
